@@ -40,6 +40,7 @@ const router = createRouter({
     { path: '/trace', name: 'trace', component: Trace },
     { path: '/quality', name: 'quality', component: Quality },
     { path: '/route', name: 'route', component: Route },
+    { path: '/route/:id', name: 'route-detail', component: () => import('@/views/route/detail.vue') },
     { path: '/dispatch', name: 'dispatch', component: Dispatch },
     { path: '/device', name: 'device', component: Device },
     { path: '/maint', name: 'maint', component: Maint },

@@ -12,7 +12,6 @@ router = APIRouter(prefix="/api/route", tags=["线路管理"])
 
 service = RouteService()
 
-LIST_FIELDS = ["线路编码", "线路名称", "起点冷库", "终点冷库", "途经站点", "预计时长", "线路里程"]
 STATUSES = ["草稿", "已启用", "已停用"]
 
 
@@ -28,6 +27,13 @@ def list_entries(
         raise HTTPException(status_code=400, detail="每页最多 200 条，请缩小分页范围")
     items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size)
     return PageResult(items=items, total=total, page=page, size=size)
+
+
+@router.get("/export")
+def export_entries() -> dict[str, Any]:
+    """导出线路管理清单：返回当前过滤条件下的全量数据。"""
+    items, total = service.list_entries(page=1, size=10000)
+    return {"module": "route", "total": total, "items": items}
 
 
 @router.get("/{entry_id}", response_model=dict)
@@ -48,18 +54,25 @@ def create_entry(payload: EntryPayload) -> ActionResult:
     return ActionResult(ok=True, message="配送线路已登记", entry=entry)
 
 
-@router.post("/{entry_id}/actions", response_model=ActionResult)
-def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
-    """对单条配送线路执行启用线路、调整站点、停用线路；不允许的动作会被拦下并说明原因。"""
-    action = str(payload.values.get("action") or "").strip()
-    entry, message = service.run_action(entry_id, action)
+@router.put("/{entry_id}/draft", response_model=ActionResult)
+def save_draft(entry_id: int, payload: EntryPayload) -> ActionResult:
+    """保存草稿线路的途经站点、起点冷库、终点冷库等改动；只在草稿状态可保存。"""
+    entry, message = service.save_draft(entry_id, payload.values)
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)
 
 
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出线路管理清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "route", "total": total, "items": items}
+@router.post("/{entry_id}/actions", response_model=ActionResult)
+def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
+    """对单条配送线路执行启用线路、调整站点、停用线路；不允许的动作会被拦下并说明原因。"""
+    action = str(payload.values.get("action") or "").strip()
+    if action == "回收草稿":
+        entry, message = service.discard_draft(entry_id)
+        if entry is None:
+            return ActionResult(ok=False, message=message)
+        return ActionResult(ok=True, message=message, entry=entry)
+    entry, message = service.run_action(entry_id, action)
+    if entry is None:
+        return ActionResult(ok=False, message=message)
+    return ActionResult(ok=True, message=message, entry=entry)
